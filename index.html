@@ -1,0 +1,882 @@
+<title>La Huida</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Share+Tech+Mono&display=swap">
+<style>
+/* Layout: una sola columna centrada. Cabecera con estado, tablero con niebla y cámara que sigue al jugador,
+   controles táctiles debajo. Juego de un solo ambiente oscuro, por eso no cambia con el tema del visor. */
+:root {
+  --bg: #0a0c0b;
+  --panel: #121614;
+  --line: #232a26;
+  --fg: #d8dcd0;
+  --muted: #7f8a80;
+  --blood: #b3261e;
+  --lamp: #e8c36a;
+  --moss: #6fae7a;
+  --amulet: #58c7d6;
+  --font-display: 'IM Fell English SC', Georgia, 'Times New Roman', serif;
+  --font-ui: 'Share Tech Mono', ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  padding-inline: 16px;
+  padding-block: 20px 28px;
+  -webkit-tap-highlight-color: transparent;
+}
+.wrap { max-width: 800px; margin-inline: auto; display: flex; flex-direction: column; gap: 14px; }
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; }
+h1.name { font-family: var(--font-display); font-weight: 400; font-size: clamp(30px, 6vw, 44px); line-height: 1; letter-spacing: .04em; margin: 0; color: var(--fg); }
+h1.name small { display: block; font-family: var(--font-ui); font-size: 12px; letter-spacing: .22em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+.tools { display: flex; gap: 8px; }
+.chip {
+  font: inherit; color: var(--muted); background: transparent; border: 1px solid var(--line);
+  padding: 6px 10px; border-radius: 4px; cursor: pointer; min-height: 34px;
+}
+.chip:hover { color: var(--fg); border-color: var(--muted); }
+.hud { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; min-width: 0; }
+.stat .lab { display: block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.stat .sub { display: block; margin-top: 4px; font-size: 11px; color: var(--muted); }
+.bar { height: 10px; background: #1b211e; border-radius: 2px; overflow: hidden; }
+.bar > i { display: block; height: 100%; width: 100%; background: var(--blood); transition: width .25s ease; }
+.pips { display: flex; gap: 4px; flex-wrap: wrap; min-height: 14px; }
+.pips i { width: 8px; height: 14px; border: 1px solid #3a3320; border-radius: 1px; background: transparent; }
+.pips i.on { background: var(--lamp); border-color: var(--lamp); box-shadow: 0 0 6px rgba(232,195,106,.5); }
+.val { font-size: 18px; font-variant-numeric: tabular-nums; }
+.val small { color: var(--muted); font-size: 12px; }
+.val.amu-on { color: var(--amulet); }
+#fit { width: 100%; }
+.board { position: relative; margin-inline: auto; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; background: #000; touch-action: none; }
+canvas { display: block; }
+.log { min-height: 2.8em; color: var(--muted); text-align: center; }
+.log b { color: var(--fg); font-weight: 400; }
+.ov { position: absolute; inset: 0; display: flex; overflow-y: auto; padding: 14px; background: rgba(5,7,6,.9); }
+.ov[hidden] { display: none; }
+.card { margin: auto; max-width: 460px; text-align: center; display: flex; flex-direction: column; gap: 12px; align-items: center; }
+.card h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 6vw, 40px); margin: 0; letter-spacing: .04em; }
+.card p { margin: 0; color: var(--fg); font-size: 14px; max-width: 40ch; text-wrap: balance; }
+.keys { list-style: none; margin: 0; padding: 0; color: var(--muted); font-size: 12px; display: grid; gap: 2px; }
+.keys kbd { font-family: var(--font-ui); color: var(--lamp); }
+.keys .amu { color: var(--amulet); }
+.keys .len { color: #f2f0e4; }
+.btn {
+  font: inherit; font-size: 15px; letter-spacing: .12em; text-transform: uppercase; cursor: pointer;
+  color: #14100a; background: var(--lamp); border: 0; border-radius: 4px; padding: 11px 22px; min-height: 44px;
+}
+.btn:hover { background: #f1d28a; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-size: 13px; padding: 8px 16px; min-height: 38px; }
+.btn.ghost:hover { color: var(--fg); border-color: var(--muted); background: transparent; }
+.row { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.credit { font-family: var(--font-display); font-size: 20px; letter-spacing: .14em; color: var(--lamp); margin-top: -4px; }
+.badge { border: 1px solid #5a4a22; background: rgba(232,195,106,.08); color: var(--lamp); padding: 10px 16px; border-radius: 4px; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; box-shadow: 0 0 22px rgba(232,195,106,.18); }
+button:focus-visible { outline: 2px solid var(--moss); outline-offset: 2px; }
+.pad { display: none; grid-template-columns: 64px 64px 64px 1fr; grid-template-rows: 56px 56px; gap: 8px; justify-content: center; align-items: stretch; user-select: none; -webkit-user-select: none; touch-action: none; }
+.pad button {
+  font: inherit; font-size: 20px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  touch-action: none; cursor: pointer;
+}
+.pad button:active, .pad button.down { background: #1d2521; border-color: var(--moss); }
+.pad .up { grid-column: 2; grid-row: 1; }
+.pad .left { grid-column: 1; grid-row: 2; }
+.pad .down { grid-column: 2; grid-row: 2; }
+.pad .right { grid-column: 3; grid-row: 2; }
+.pad .flash { grid-column: 4; grid-row: 1 / span 2; margin-left: 12px; min-width: 96px; font-size: 14px; letter-spacing: .14em; text-transform: uppercase; color: var(--lamp); border-color: #4a4024; }
+@media (hover: none), (max-width: 640px) { .pad { display: grid; } }
+.hud.k5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.val.key-on { color: var(--lamp); }
+.val.key-off { color: #e0574d; }
+@media (max-width: 640px) { .hud, .hud.k5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } #keyStat { grid-column: 1 / -1; } }
+.foot { color: var(--muted); font-size: 12px; text-align: center; }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <h1 class="name">La Huida<small>Ruta de terror</small></h1>
+    <div class="tools">
+      <button class="chip" id="muteBtn" type="button" aria-pressed="false">Sonido: sí</button>
+      <button class="chip" id="restartBtn" type="button">Menú</button>
+    </div>
+  </div>
+
+  <div class="hud" id="hudGrid">
+    <div class="stat">
+      <span class="lab">Salud y cordura</span>
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" id="hpBar"><i id="hpFill"></i></div>
+    </div>
+    <div class="stat">
+      <span class="lab">Linterna</span>
+      <div class="pips" id="pips"></div>
+      <span class="sub" id="lens"></span>
+    </div>
+    <div class="stat">
+      <span class="lab">Amuleto</span>
+      <div class="val" id="slow">—</div>
+      <span class="sub">criaturas lentas</span>
+    </div>
+    <div class="stat">
+      <span class="lab">Noche</span>
+      <div class="val"><span id="lvl">1</span><small>/100 · mejor <span id="best">0</span></small></div>
+      <span class="sub" id="size"></span>
+    </div>
+    <div class="stat" id="keyStat" hidden>
+      <span class="lab">Llave</span>
+      <div class="val key-off" id="keyVal">Falta</div>
+      <span class="sub">abre la cabaña</span>
+    </div>
+  </div>
+
+  <div id="fit">
+    <div class="board" id="board">
+      <canvas id="cv" aria-label="Mapa del bosque"></canvas>
+      <div class="ov" id="ov">
+        <div class="card">
+          <h2 id="ovT">La Huida</h2>
+          <div class="credit" id="ovCredit">by Dante Z</div>
+          <p id="ovP"></p>
+          <ul class="keys" id="ovK"></ul>
+          <div class="badge" id="ovBadge" hidden>★ Logro: Superviviente de las 100 noches</div>
+          <div class="row">
+            <button class="btn" id="ovB" type="button">Empezar</button>
+            <button class="btn ghost" id="ovB2" type="button" hidden>Nueva partida</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log" id="log" aria-live="polite"></div>
+
+  <div class="pad" id="pad">
+    <button class="up" data-dir="up" type="button" aria-label="Arriba">▲</button>
+    <button class="left" data-dir="left" type="button" aria-label="Izquierda">◀</button>
+    <button class="down" data-dir="down" type="button" aria-label="Abajo">▼</button>
+    <button class="right" data-dir="right" type="button" aria-label="Derecha">▶</button>
+    <button class="flash" id="flashBtn" type="button">Destello</button>
+  </div>
+
+  <div class="foot">WASD o flechas para moverte · Espacio para el destello · M silencio · R menú</div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  // Tamaño de la ventana de vista (en casillas). El mapa puede ser más grande y la cámara sigue al jugador.
+  const VW = 15, VH = 10;
+  let W = 15, H = 10;
+  let BASE = { x: 13, y: 8 };
+  const START = { x: 1, y: 1 };
+  const OBST1 = [[2,2],[2,3],[2,4],[5,6],[5,7],[7,1],[7,2],[10,4],[10,5],[12,8]];
+  const MON1 = [[10,2],[6,7],[3,8]];
+  const NAMES = ['Sombra Errante','Criatura del Bosque','Ente Oculto','Voz Sin Boca','Hijo del Musgo','El Que Espera','Madre del Humo','El Pálido','Mil Dientes','La Que Canta','Cuello Largo','Niebla Viva'];
+  const MAXLEVEL = 100;
+  const MAXLENS = 6;
+  const KEY_FROM = 80;
+  const DIRS = { up: [0,-1], down: [0,1], left: [-1,0], right: [1,0] };
+  const KEYS = { arrowup:'up', w:'up', arrowdown:'down', s:'down', arrowleft:'left', a:'left', arrowright:'right', d:'right' };
+  const reduced = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // El bosque crece en cada noche: 15×10 en la noche 1 y 60×36 en la noche 100.
+  const sizeFor = L => ({ w: Math.min(60, 15 + Math.ceil((L - 1) * 0.45)), h: Math.min(36, 10 + Math.ceil((L - 1) * 0.26)) });
+  // Cada 20 noches cambian los colores del bosque y de las criaturas, cada vez más parecidos entre sí.
+  const PALS = [
+    { gh: 150, gs: 10, gl: 8, trunk: '#2a1f16', c1: '#12281b', c2: '#1a3a27', mfill: '#161012', mstroke: 'rgba(150,30,30,.6)', eye: '#ff3b2f' },
+    { gh: 170, gs: 8, gl: 9, trunk: '#232018', c1: '#142a26', c2: '#1b3832', mfill: '#13211f', mstroke: 'rgba(60,110,100,.6)', eye: '#e04a3a' },
+    { gh: 260, gs: 8, gl: 9, trunk: '#221c26', c1: '#1f1a2c', c2: '#2a2340', mfill: '#1c1730', mstroke: 'rgba(100,80,150,.6)', eye: '#c4553f' },
+    { gh: 200, gs: 3, gl: 10, trunk: '#26262a', c1: '#222629', c2: '#2d3236', mfill: '#202528', mstroke: 'rgba(120,130,140,.55)', eye: '#a85a48' },
+    { gh: 220, gs: 4, gl: 6, trunk: '#1a1a1e', c1: '#17191d', c2: '#1e2126', mfill: '#16181c', mstroke: 'rgba(90,95,105,.5)', eye: '#8f5a50' }
+  ];
+  const palOf = L => PALS[Math.min(PALS.length - 1, Math.floor((L - 1) / 20))];
+  const ITEM_COLOR = { bat: '#e8c36a', amu: '#58c7d6', lens: '#f2f0e4', key: '#ffd86b' };
+
+  const $ = id => document.getElementById(id);
+  const cv = $('cv'), ctx = cv.getContext('2d');
+  const board = $('board'), fit = $('fit');
+  const ov = $('ov'), ovT = $('ovT'), ovP = $('ovP'), ovK = $('ovK'), ovB = $('ovB'), ovB2 = $('ovB2'), ovBadge = $('ovBadge'), ovCredit = $('ovCredit'), hudGrid = $('hudGrid'), keyStat = $('keyStat'), keyVal = $('keyVal');
+  const logEl = $('log'), hpFill = $('hpFill'), hpBar = $('hpBar'), pipsEl = $('pips');
+  const lvlEl = $('lvl'), bestEl = $('best'), lensEl = $('lens'), slowEl = $('slow'), sizeEl = $('size');
+
+  let cs = 40, dpr = 1;
+  let best = 0;
+  try { best = parseInt(localStorage.getItem('lahuida-best') || '0', 10) || 0; } catch (e) {}
+
+  // ---------- audio ----------
+  let actx = null, muted = false, nextBeat = 0;
+  function initAudio() {
+    if (actx) { if (actx.state === 'suspended') actx.resume(); return; }
+    try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; }
+  }
+  function tone(freq, dur, type, vol, slideTo, delay) {
+    if (!actx || muted) return;
+    try {
+      const t = actx.currentTime + (delay || 0);
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || 'sine';
+      o.frequency.setValueAtTime(freq, t);
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(actx.destination);
+      o.start(t); o.stop(t + dur + 0.02);
+    } catch (e) {}
+  }
+  function heartbeat(vol) { tone(62, .16, 'sine', .45 * vol, 32); tone(52, .18, 'sine', .32 * vol, 30, .17); }
+
+  // ---------- estado ----------
+  let S = null;
+  let held = [];
+  let mode = 'menu';
+  let logTimer = 0;
+  let lastSlow = -1;
+  let run = { t: 0, hits: 0 };
+  let done = false;
+  try { done = localStorage.getItem('lahuida-done') === '1'; } catch (e) {}
+  const SAVE_KEY = 'lahuida-save';
+  function readSave() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+      if (s && s.level >= 2 && s.level <= MAXLEVEL) return { level: s.level | 0, lens: Math.max(0, Math.min(MAXLENS, s.lens | 0)) };
+    } catch (e) {}
+    return null;
+  }
+  function writeSave(s) {
+    try { if (s) localStorage.setItem(SAVE_KEY, JSON.stringify(s)); else localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  }
+  function fmtTime(sec) {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+    const two = n => String(n).padStart(2, '0');
+    return h > 0 ? h + ':' + two(m) + ':' + two(s) : m + ':' + two(s);
+  }
+  // Punto de control: se guarda al superar las noches 20, 40, 60 y 80. Si caes, vuelves a la última.
+  const CP_KEY = 'lahuida-cp';
+  function readCp() {
+    try {
+      const s = JSON.parse(localStorage.getItem(CP_KEY) || 'null');
+      if (s && s.level >= 21 && s.level <= MAXLEVEL && (s.level - 1) % 20 === 0) return { level: s.level | 0, lens: Math.max(0, Math.min(MAXLENS, s.lens | 0)) };
+    } catch (e) {}
+    return null;
+  }
+  function writeCp(c) {
+    try { if (c) localStorage.setItem(CP_KEY, JSON.stringify(c)); else localStorage.removeItem(CP_KEY); } catch (e) {}
+  }
+  let cp = readCp();
+
+  function say(html) { logEl.innerHTML = html; clearTimeout(logTimer); logTimer = setTimeout(() => { logEl.innerHTML = ''; }, 5500); }
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const rand = n => Math.floor(Math.random() * n);
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+  function reachable(blocked) {
+    const seen = Array.from({ length: H }, () => Array(W).fill(false));
+    const q = [[START.x, START.y]];
+    seen[START.y][START.x] = true;
+    while (q.length) {
+      const [x, y] = q.pop();
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < W && ny >= 0 && ny < H && !blocked[ny][nx] && !seen[ny][nx]) { seen[ny][nx] = true; q.push([nx, ny]); }
+      }
+    }
+    return seen;
+  }
+
+  function genBlocked(level) {
+    const mk = () => Array.from({ length: H }, () => Array(W).fill(false));
+    if (level === 1) { const b = mk(); OBST1.forEach(([x, y]) => { b[y][x] = true; }); return b; }
+    for (let a = 0; a < 40; a++) {
+      const b = mk();
+      const target = Math.floor(W * H * Math.min(0.17, 0.10 + level * 0.001));
+      let placed = 0, guard = 0;
+      while (placed < target && guard++ < 3000) {
+        const x = rand(W), y = rand(H), horiz = Math.random() < 0.5, len = 1 + rand(3);
+        for (let k = 0; k < len; k++) {
+          const cx = x + (horiz ? k : 0), cy = y + (horiz ? 0 : k);
+          if (cx >= W || cy >= H) break;
+          if (!b[cy][cx]) { b[cy][cx] = true; placed++; }
+        }
+      }
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const sx = START.x + dx, sy = START.y + dy, bx = BASE.x + dx, by = BASE.y + dy;
+        if (sx >= 0 && sx < W && sy >= 0 && sy < H) b[sy][sx] = false;
+        if (bx >= 0 && bx < W && by >= 0 && by < H) b[by][bx] = false;
+      }
+      if (reachable(b)[BASE.y][BASE.x]) return b;
+    }
+    return mk();
+  }
+
+  function newGame(level, lens) {
+    const sz = sizeFor(level);
+    W = sz.w; H = sz.h;
+    BASE = { x: W - 2, y: H - 2 };
+    const blocked = genBlocked(level);
+    const reach = reachable(blocked);
+    const ground = Array.from({ length: H }, () => Array.from({ length: W }, () => ({
+      r: Math.random(),
+      specks: [[Math.random(), Math.random()], [Math.random(), Math.random()], [Math.random(), Math.random()]]
+    })));
+
+    const spots = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (reach[y][x] && !blocked[y][x] && !(x === BASE.x && y === BASE.y)) spots.push({ x, y });
+    }
+    shuffle(spots);
+
+    const mkMon = (x, y, i) => ({ x, y, dx: x, dy: y, name: NAMES[i % NAMES.length], stun: 0, seed: Math.random() * 10 });
+    const monsters = [];
+    const nMon = Math.min(18, 3 + Math.floor((level - 1) / 5));
+    if (level === 1) MON1.forEach(([x, y], i) => monsters.push(mkMon(x, y, i)));
+    else {
+      for (let i = spots.length - 1; i >= 0 && monsters.length < nMon; i--) {
+        const s = spots[i];
+        if (dist(s, START) >= 9 && dist(s, BASE) >= 3 && !monsters.some(m => dist(m, s) < 3)) {
+          spots.splice(i, 1);
+          monsters.push(mkMon(s.x, s.y, monsters.length));
+        }
+      }
+    }
+
+    const items = [];
+    const put = type => {
+      for (let i = spots.length - 1; i >= 0; i--) {
+        if (dist(spots[i], START) >= 3) { const s = spots.splice(i, 1)[0]; items.push({ x: s.x, y: s.y, type }); return; }
+      }
+    };
+    const nBat = Math.min(16, 4 + Math.floor(level / 4)), nAmu = Math.min(10, 2 + Math.floor(level / 10));
+    for (let i = 0; i < nBat; i++) put('bat');
+    for (let i = 0; i < nAmu; i++) put('amu');
+    if ((lens || 0) < MAXLENS && (level <= 3 || level % 5 === 0)) put('lens');
+    if (level >= KEY_FROM) {
+      // La llave queda lejos del inicio y de la cabaña, para obligar a explorar.
+      let placed = false;
+      for (let i = spots.length - 1; i >= 0 && !placed; i--) {
+        if (dist(spots[i], START) >= 14 && dist(spots[i], BASE) >= 12) { const s = spots.splice(i, 1)[0]; items.push({ x: s.x, y: s.y, type: 'key' }); placed = true; }
+      }
+      if (!placed && spots.length) { const s = spots.pop(); items.push({ x: s.x, y: s.y, type: 'key' }); }
+    }
+
+    return {
+      level, blocked, ground, monsters, items, reach, pal: palOf(level),
+      p: { x: START.x, y: START.y, dx: START.x, dy: START.y, face: 'down' },
+      salud: 100, linterna: 5, lens: lens || 0, lens0: lens || 0, slowT: 0,
+      needKey: level >= KEY_FROM, hasKey: false,
+      time: 0, stepCd: 0, mCd: 0.6, flashT: 0, hurtT: 0, inv: 0, shake: 0, nearest: 99, cam: { x: 0, y: 0 }
+    };
+  }
+
+  function resetHud() {
+    pipsEl.innerHTML = '';
+    for (let i = 0; i < 9; i++) pipsEl.appendChild(document.createElement('i'));
+  }
+  function hud() {
+    hpFill.style.width = Math.max(0, S.salud) + '%';
+    hpBar.setAttribute('aria-valuenow', Math.max(0, S.salud));
+    const pips = pipsEl.children;
+    for (let i = 0; i < pips.length; i++) pips[i].classList.toggle('on', i < S.linterna);
+    lensEl.textContent = 'Lente ' + S.lens + '/' + MAXLENS;
+    lvlEl.textContent = S.level;
+    bestEl.textContent = best;
+    sizeEl.textContent = 'Bosque ' + W + '×' + H + (cp ? ' · punto ' + cp.level : '');
+    const sl = Math.ceil(S.slowT);
+    slowEl.textContent = sl > 0 ? sl + ' s' : '—';
+    slowEl.classList.toggle('amu-on', sl > 0);
+    lastSlow = sl;
+    keyStat.hidden = !S.needKey;
+    hudGrid.classList.toggle('k5', !!S.needKey);
+    keyVal.textContent = S.hasKey ? 'En mano' : 'Falta';
+    keyVal.className = 'val ' + (S.hasKey ? 'key-on' : 'key-off');
+  }
+
+  // ---------- pantallas ----------
+  function showOverlay(kind) {
+    mode = kind;
+    ov.hidden = false;
+    ovBadge.hidden = true; ovB2.hidden = true;
+    ovCredit.hidden = kind !== 'menu' && kind !== 'victory';
+    if (kind === 'menu') {
+      ovT.textContent = 'La Huida';
+      ovP.textContent = 'Cruza el bosque de noche hasta la cabaña de la esquina inferior derecha. Las criaturas te siguen. Cada noche el bosque crece. Sobrevive 100 noches: si te cazan, vuelves al último punto de control.';
+      ovK.innerHTML = '<li><kbd>WASD</kbd> o flechas: moverte · <kbd>Espacio</kbd>: destello</li>' +
+        '<li style="color:#e8c36a">Pila amarilla: +2 cargas de linterna</li>' +
+        '<li class="amu">Amuleto azul: criaturas lentas por 10 s</li>' +
+        '<li class="len">Lente blanca: tu luz llega más lejos para siempre</li>' +
+        '<li>Punto de control cada 20 noches</li>' +
+        '<li style="color:#ffd86b">Desde la noche 80, busca la llave de la cabaña</li>';
+      const sv = readSave();
+      if (sv) {
+        ovP.textContent = 'Tienes una partida guardada en la noche ' + sv.level + ' de ' + MAXLEVEL + '. Cada noche el bosque crece un poco más.';
+        ovB.textContent = 'Continuar noche ' + sv.level;
+        ovB2.hidden = false;
+      } else ovB.textContent = 'Empezar';
+      if (done) ovK.innerHTML += '<li style="color:#e8c36a">★ Ya superaste las 100 noches</li>';
+    } else if (kind === 'victory') {
+      ovT.textContent = '¡Lo lograste!';
+      ovP.textContent = 'Sobreviviste a las 100 noches. La cabaña es tuya y el bosque, por fin, guarda silencio. Tiempo total: ' + fmtTime(run.t) + ' · Golpes recibidos: ' + run.hits + '.';
+      ovK.innerHTML = '';
+      ovBadge.hidden = false;
+      ovB.textContent = 'Jugar de nuevo';
+    } else if (kind === 'win') {
+      const nx = sizeFor(S.level + 1);
+      ovT.textContent = 'A salvo';
+      const hito = S.level % 10 === 0 ? '¡' + S.level + ' noches superadas! ' : '';
+      const cambio = S.level % 20 === 0 ? ' El bosque cambiará de colores y será más difícil distinguir a las criaturas.' : '';
+      const puntoMsg = S.level % 20 === 0 ? ' Punto de control guardado: si caes, vuelves a la noche ' + (S.level + 1) + '.' : '';
+      const llaveMsg = S.level + 1 === KEY_FROM ? ' Desde la noche ' + KEY_FROM + ' la cabaña está cerrada: tendrás que encontrar la llave.' : '';
+      ovP.textContent = hito + 'Cerraste la puerta de la cabaña a tiempo. La noche ' + (S.level + 1) + ' trae un bosque de ' + nx.w + '×' + nx.h + ' y más peligro. Conservas tus lentes y tu progreso queda guardado.' + puntoMsg + cambio + llaveMsg;
+      ovK.innerHTML = '';
+      ovB.textContent = 'Noche ' + (S.level + 1);
+    } else {
+      ovT.textContent = 'Te cazaron';
+      ovP.textContent = 'Tu cordura se agotó en la oscuridad. Caíste en la noche ' + S.level + (cp ? ' y vuelves al último punto de control: la noche ' + cp.level + '.' : ' y el bosque te devuelve a la primera.') + ' Tu mejor noche: ' + best + '.';
+      ovK.innerHTML = '';
+      ovB.textContent = cp ? 'Volver a la noche ' + cp.level : 'Volver a empezar';
+    }
+    ovB.focus({ preventScroll: true });
+  }
+  function startPlay(level, lens, fresh) {
+    initAudio();
+    if (fresh) {
+      run = { t: 0, hits: 0 };
+      if (level === 1) { cp = null; writeCp(null); }
+    }
+    S = newGame(level, lens);
+    nextBeat = 0;
+    held = [];
+    ov.hidden = true;
+    mode = 'play';
+    resetHud(); hud();
+    const keyMsg = level >= KEY_FROM ? ' La cabaña está cerrada: encuentra la llave dorada.' : '';
+    const tierMsg = level > 1 && (level - 1) % 20 === 0 ? ' Los colores del bosque cambiaron: todo se confunde más.' : '';
+    say(level === 1 ?'Busca la luz de la cabaña, abajo a la derecha.' : (level === MAXLEVEL ? 'Noche 100, la última. ' : 'Noche ' + level + '. ') + 'El bosque ahora mide ' + W + '×' + H + '. Sigue la flecha hacia la cabaña.' + tierMsg + keyMsg);
+  }
+  function onOverlayButton() {
+    if (mode === 'menu') { const sv = readSave(); if (sv) startPlay(sv.level, sv.lens, true); else startPlay(1, 0, true); }
+    else if (mode === 'win') startPlay(S.level + 1, S.lens);
+    else if (mode === 'lose') { if (cp) startPlay(cp.level, cp.lens, false); else startPlay(1, 0, true); }
+    else if (mode === 'victory') startPlay(1, 0, true);
+  }
+  function onOverlayButton2() { if (mode === 'menu') startPlay(1, 0, true); }
+
+  // ---------- reglas ----------
+  const free = (x, y) => x >= 0 && x < W && y >= 0 && y < H && !S.blocked[y][x] && !(x === BASE.x && y === BASE.y);
+
+  function relocate(m) {
+    for (let i = 0; i < 120; i++) {
+      const x = rand(W), y = rand(H);
+      if (free(x, y) && S.reach[y][x] && dist({ x, y }, S.p) >= 7 && !S.monsters.some(o => o !== m && o.x === x && o.y === y)) {
+        m.x = x; m.y = y; m.dx = x; m.dy = y; return;
+      }
+    }
+  }
+
+  function moveMonsters() {
+    for (const m of S.monsters) {
+      if (m.stun > 0) continue;
+      const ddx = S.p.x - m.x, ddy = S.p.y - m.y;
+      let cand = [];
+      if (dist(m, S.p) <= 12 && Math.random() < 0.7) {
+        const sx = Math.sign(ddx), sy = Math.sign(ddy);
+        if (Math.abs(ddx) >= Math.abs(ddy)) { if (sx) cand.push([sx, 0]); if (sy) cand.push([0, sy]); }
+        else { if (sy) cand.push([0, sy]); if (sx) cand.push([sx, 0]); }
+      } else {
+        cand = shuffle([[1,0],[-1,0],[0,1],[0,-1]]);
+      }
+      for (const [cx, cy] of cand) {
+        const nx = m.x + cx, ny = m.y + cy;
+        if (free(nx, ny) && !S.monsters.some(o => o !== m && o.x === nx && o.y === ny)) { m.x = nx; m.y = ny; break; }
+      }
+    }
+  }
+
+  function checkHits() {
+    if (S.inv > 0) return;
+    for (const m of S.monsters) {
+      if (m.x === S.p.x && m.y === S.p.y) {
+        S.salud -= 35; run.hits++;
+        S.hurtT = 0.7; S.inv = 1.3; S.shake = reduced ? 0 : 0.35;
+        m.stun = 2.5;
+        say('<b>' + m.name + '</b> te alcanzó. -35 de salud.');
+        tone(110, .35, 'sawtooth', .22, 40);
+        relocate(m);
+        if (S.salud <= 0) { S.salud = 0; lose(); }
+        hud();
+        return;
+      }
+    }
+  }
+
+  function lose() {
+    writeSave(cp);
+    tone(180, 1, 'sawtooth', .2, 30);
+    hud();
+    showOverlay('lose');
+  }
+  function win() {
+    if (S.level > best) {
+      best = S.level;
+      try { localStorage.setItem('lahuida-best', String(best)); } catch (e) {}
+    }
+    if (S.level >= MAXLEVEL) { victory(); return; }
+    writeSave({ level: S.level + 1, lens: S.lens });
+    if (S.level % 20 === 0) { cp = { level: S.level + 1, lens: S.lens }; writeCp(cp); }
+    tone(392, .25, 'triangle', .22, null, 0);
+    tone(523, .25, 'triangle', .22, null, .18);
+    tone(659, .5, 'triangle', .22, null, .36);
+    hud();
+    showOverlay('win');
+  }
+
+  function victory() {
+    done = true;
+    try { localStorage.setItem('lahuida-done', '1'); } catch (e) {}
+    writeSave(null);
+    cp = null; writeCp(null);
+    [[523, 0], [659, .2], [784, .4], [1047, .6], [1319, .9]].forEach(([f, d]) => tone(f, .6, 'triangle', .22, null, d));
+    hud();
+    showOverlay('victory');
+  }
+
+  function tryMove(dir) {
+    const [dx, dy] = DIRS[dir];
+    S.p.face = dir;
+    const nx = S.p.x + dx, ny = S.p.y + dy;
+    if (nx < 0 || nx >= W || ny < 0 || ny >= H) return;
+    if (S.blocked[ny][nx]) return;
+    if (nx === BASE.x && ny === BASE.y && S.needKey && !S.hasKey) {
+      S.stepCd = 0.3;
+      say('La puerta de la cabaña está cerrada con llave. <b>Búscala</b> en el bosque.');
+      tone(90, .2, 'square', .1);
+      return;
+    }
+    S.p.x = nx; S.p.y = ny;
+    S.stepCd = 0.13;
+    for (let i = S.items.length - 1; i >= 0; i--) {
+      const it = S.items[i];
+      if (it.x !== nx || it.y !== ny) continue;
+      S.items.splice(i, 1);
+      if (it.type === 'bat') {
+        S.linterna = Math.min(9, S.linterna + 2);
+        say('Encontraste pilas. <b>+2</b> cargas de linterna.');
+        tone(660, .12, 'triangle', .18); tone(880, .16, 'triangle', .18, null, .1);
+      } else if (it.type === 'amu') {
+        S.slowT = Math.min(25, S.slowT + 10);
+        say('Amuleto. Las criaturas se mueven mucho más lento durante <b>10 s</b>.');
+        tone(300, .25, 'sine', .2, 600); tone(450, .3, 'sine', .18, 900, .12);
+      } else if (it.type === 'lens') {
+        S.lens = Math.min(MAXLENS, S.lens + 1);
+        say('Lente nueva. Tu luz llega <b>más lejos</b> (' + S.lens + '/' + MAXLENS + ').');
+        tone(784, .15, 'triangle', .2); tone(988, .15, 'triangle', .2, null, .1); tone(1318, .3, 'triangle', .2, null, .2);
+      } else if (it.type === 'key') {
+        S.hasKey = true;
+        say('Encontraste la <b>llave</b>. Ya puedes abrir la cabaña.');
+        tone(523, .12, 'square', .1); tone(784, .12, 'square', .1, null, .1); tone(1047, .35, 'triangle', .2, null, .2);
+      }
+      hud();
+    }
+    if (nx === BASE.x && ny === BASE.y) { win(); return; }
+    checkHits();
+  }
+
+  function flash() {
+    if (mode !== 'play' || S.flashT > 0.4) return;
+    if (S.linterna <= 0) { say('La linterna no tiene carga.'); tone(120, .15, 'square', .08); return; }
+    S.linterna--;
+    S.flashT = 1.4;
+    let n = 0;
+    const reach = 4.5 + S.lens * 0.5;
+    for (const m of S.monsters) if (dist(m, S.p) <= reach) { m.stun = 3; n++; }
+    say(n ? 'El destello paralizó a <b>' + n + '</b> ' + (n === 1 ? 'criatura' : 'criaturas') + '.' : 'Destello. No había nada cerca.');
+    tone(1400, .12, 'square', .08, 500);
+    hud();
+  }
+
+  function update(dt) {
+    if (mode !== 'play') return;
+    S.time += dt; run.t += dt;
+    S.flashT = Math.max(0, S.flashT - dt);
+    S.hurtT = Math.max(0, S.hurtT - dt);
+    S.inv = Math.max(0, S.inv - dt);
+    S.shake = Math.max(0, S.shake - dt);
+    S.slowT = Math.max(0, S.slowT - dt);
+    S.stepCd -= dt;
+    for (const m of S.monsters) m.stun = Math.max(0, m.stun - dt);
+    if (Math.ceil(S.slowT) !== lastSlow) hud();
+
+    if (S.stepCd <= 0 && held.length) tryMove(held[held.length - 1]);
+    if (mode !== 'play') return;
+
+    S.mCd -= dt;
+    let tick = Math.max(0.2, 0.58 - (S.level - 1) * 0.0042);
+    if (S.slowT > 0) tick *= 2.6;
+    if (S.mCd <= 0) { S.mCd += tick; moveMonsters(); checkHits(); }
+    if (mode !== 'play') return;
+
+    const k = Math.min(1, dt * 18);
+    S.p.dx += (S.p.x - S.p.dx) * k; S.p.dy += (S.p.y - S.p.dy) * k;
+    for (const m of S.monsters) { m.dx += (m.x - m.dx) * Math.min(1, dt * 9); m.dy += (m.y - m.dy) * Math.min(1, dt * 9); }
+
+    let nearest = 99;
+    for (const m of S.monsters) nearest = Math.min(nearest, dist(m, S.p));
+    S.nearest = nearest;
+    if (S.time >= nextBeat) {
+      if (nearest < 8) heartbeat(Math.min(1, 1.2 - nearest / 9));
+      nextBeat = S.time + Math.max(0.42, Math.min(1.5, 0.35 + nearest * 0.13));
+    }
+  }
+
+  // ---------- dibujo ----------
+  function resize() {
+    const avail = Math.max(240, fit.clientWidth);
+    cs = Math.max(16, Math.min(52, Math.floor(avail / VW)));
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = VW * cs * dpr; cv.height = VH * cs * dpr;
+    cv.style.width = VW * cs + 'px'; cv.style.height = VH * cs + 'px';
+    board.style.width = VW * cs + 'px';
+  }
+
+  function drawTree(x, y) {
+    const cx = (x + .5) * cs, cy = (y + .5) * cs;
+    ctx.fillStyle = S.pal.trunk;
+    ctx.fillRect(cx - cs * .06, cy + cs * .02, cs * .12, cs * .34);
+    ctx.fillStyle = S.pal.c1;
+    ctx.beginPath(); ctx.arc(cx, cy - cs * .08, cs * .37, 0, 6.283); ctx.fill();
+    ctx.fillStyle = S.pal.c2;
+    ctx.beginPath(); ctx.arc(cx - cs * .08, cy - cs * .14, cs * .2, 0, 6.283); ctx.fill();
+  }
+  function drawCabin() {
+    const x = BASE.x * cs, y = BASE.y * cs;
+    ctx.fillStyle = '#2b2118'; ctx.fillRect(x + cs * .12, y + cs * .38, cs * .76, cs * .5);
+    ctx.fillStyle = '#3d2c1c';
+    ctx.beginPath(); ctx.moveTo(x + cs * .04, y + cs * .42); ctx.lineTo(x + cs * .5, y + cs * .1); ctx.lineTo(x + cs * .96, y + cs * .42); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#1a130d'; ctx.fillRect(x + cs * .58, y + cs * .58, cs * .2, cs * .3);
+  }
+  function drawItem(it, t) {
+    const cx = (it.x + .5) * cs, cy = (it.y + .5) * cs;
+    const glint = 0.75 + 0.25 * Math.sin(t * 4 + it.x);
+    if (it.type === 'bat') {
+      ctx.fillStyle = 'rgba(232,195,106,' + (0.9 * glint) + ')';
+      ctx.fillRect(cx - cs * .1, cy - cs * .14, cs * .2, cs * .3);
+      ctx.fillRect(cx - cs * .05, cy - cs * .2, cs * .1, cs * .06);
+    } else if (it.type === 'amu') {
+      ctx.fillStyle = 'rgba(88,199,214,' + (0.9 * glint) + ')';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - cs * .2); ctx.lineTo(cx + cs * .14, cy); ctx.lineTo(cx, cy + cs * .2); ctx.lineTo(cx - cs * .14, cy); ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(190,240,246,.8)'; ctx.lineWidth = Math.max(1, cs * .03); ctx.stroke();
+    } else if (it.type === 'key') {
+      const kc = 'rgba(255,216,107,' + (0.95 * glint) + ')';
+      ctx.strokeStyle = kc; ctx.fillStyle = kc; ctx.lineWidth = Math.max(1.5, cs * .07);
+      ctx.beginPath(); ctx.arc(cx - cs * .16, cy, cs * .1, 0, 6.283); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx - cs * .06, cy); ctx.lineTo(cx + cs * .22, cy); ctx.stroke();
+      ctx.fillRect(cx + cs * .12, cy, cs * .05, cs * .12);
+      ctx.fillRect(cx + cs * .21, cy, cs * .05, cs * .09);
+    } else {
+      ctx.strokeStyle = 'rgba(242,240,228,' + (0.95 * glint) + ')';
+      ctx.lineWidth = Math.max(1.5, cs * .06);
+      ctx.beginPath(); ctx.arc(cx, cy, cs * .17, 0, 6.283); ctx.stroke();
+      ctx.fillStyle = 'rgba(242,240,228,.35)';
+      ctx.beginPath(); ctx.arc(cx, cy, cs * .1, 0, 6.283); ctx.fill();
+    }
+  }
+  function drawMonster(m, t, i) {
+    const cx = (m.dx + .5) * cs, cy = (m.dy + .5) * cs + Math.sin(t * 3 + m.seed) * cs * .03;
+    const stunned = m.stun > 0;
+    ctx.fillStyle = stunned ? '#1a1f2a' : S.pal.mfill;
+    ctx.strokeStyle = stunned ? 'rgba(110,130,170,.55)' : S.pal.mstroke;
+    ctx.lineWidth = Math.max(1, cs * .04);
+    ctx.beginPath(); ctx.ellipse(cx, cy, cs * .32, cs * .38, 0, 0, 6.283); ctx.fill(); ctx.stroke();
+    for (let k = -1; k <= 1; k++) {
+      ctx.beginPath();
+      ctx.moveTo(cx + k * cs * .16, cy + cs * .3);
+      ctx.lineTo(cx + k * cs * .2 + Math.sin(t * 5 + k + i) * cs * .05, cy + cs * .48);
+      ctx.stroke();
+    }
+  }
+  function drawEyes(m, alpha) {
+    const cx = (m.dx + .5) * cs, cy = (m.dy + .5) * cs - cs * .06;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = m.stun > 0 ? '#7e92c0' : (S.slowT > 0 ? '#ff9a3c' : S.pal.eye);
+    const r = Math.max(1.5, cs * .055);
+    ctx.beginPath(); ctx.arc(cx - cs * .1, cy, r, 0, 6.283); ctx.arc(cx + cs * .1, cy, r, 0, 6.283); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  function draw(t) {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#0a0c0b';
+    ctx.fillRect(0, 0, VW * cs, VH * cs);
+    if (!S) return;
+
+    const cam = { x: Math.max(0, Math.min(W - VW, S.p.dx + .5 - VW / 2)), y: Math.max(0, Math.min(H - VH, S.p.dy + .5 - VH / 2)) };
+    S.cam = cam;
+    const x0 = Math.max(0, Math.floor(cam.x)), x1 = Math.min(W - 1, Math.ceil(cam.x + VW));
+    const y0 = Math.max(0, Math.floor(cam.y)), y1 = Math.min(H - 1, Math.ceil(cam.y + VH));
+
+    ctx.save();
+    if (S.shake > 0) ctx.translate((Math.random() - .5) * cs * .25, (Math.random() - .5) * cs * .25);
+    ctx.translate(-cam.x * cs, -cam.y * cs);
+
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      const g = S.ground[y][x];
+      ctx.fillStyle = 'hsl(' + S.pal.gh + ' ' + (S.pal.gs + g.r * 7) + '% ' + (S.pal.gl + g.r * 5) + '%)';
+      ctx.fillRect(x * cs, y * cs, cs + 1, cs + 1);
+      ctx.fillStyle = 'rgba(120,160,120,.12)';
+      for (const [sx, sy] of g.specks) ctx.fillRect(x * cs + sx * cs * .9, y * cs + sy * cs * .9, Math.max(1, cs * .05), Math.max(1.5, cs * .1));
+    }
+    drawCabin();
+    S.items.forEach(it => drawItem(it, t));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (S.blocked[y][x]) drawTree(x, y);
+    S.monsters.forEach((m, i) => drawMonster(m, t, i));
+
+    const px = (S.p.dx + .5) * cs, py = (S.p.dy + .5) * cs;
+    const blink = S.inv > 0 && Math.floor(t * 12) % 2 === 0;
+    if (!blink) {
+      ctx.fillStyle = '#e6e0cc';
+      ctx.beginPath(); ctx.arc(px, py, cs * .27, 0, 6.283); ctx.fill();
+      const [fx, fy] = DIRS[S.p.face];
+      ctx.fillStyle = '#e8c36a';
+      ctx.beginPath(); ctx.arc(px + fx * cs * .2, py + fy * cs * .2, cs * .09, 0, 6.283); ctx.fill();
+    }
+
+    // niebla con la luz de la linterna (más amplia y más clara que antes, y crece con cada lente)
+    const baseR = (S.linterna > 0 ? 4.4 : 2.7) + S.lens * 0.6;
+    const flick = reduced ? 0 : Math.sin(t * 17) * 0.06 + Math.sin(t * 7.3) * 0.05;
+    const fi = S.flashT > 0 ? Math.min(1, S.flashT / 0.5) : 0;
+    const flashR = 9.2 + S.lens * 0.6;
+    const R = (baseR + flick + (flashR - baseR) * fi) * cs;
+    const g = ctx.createRadialGradient(px, py, R * .15, px, py, R);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(.6, 'rgba(0,0,0,.26)');
+    g.addColorStop(1, 'rgba(0,0,0,.96)');
+    ctx.fillStyle = g;
+    ctx.fillRect(cam.x * cs - cs, cam.y * cs - cs, (VW + 2) * cs, (VH + 2) * cs);
+
+    // brillo cálido de la linterna
+    ctx.globalCompositeOperation = 'lighter';
+    const wg = ctx.createRadialGradient(px, py, 0, px, py, R * .9);
+    wg.addColorStop(0, 'rgba(255,214,140,' + (0.2 + fi * 0.12) + ')');
+    wg.addColorStop(1, 'rgba(255,214,140,0)');
+    ctx.fillStyle = wg;
+    ctx.fillRect(px - R, py - R, R * 2, R * 2);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // elementos que se ven desde lejos: faro de la cabaña, destellos de objetos y ojos de criaturas
+    const bx = (BASE.x + .5) * cs, by = (BASE.y + .5) * cs;
+    const bg = ctx.createRadialGradient(bx, by, 0, bx, by, cs * 2.4);
+    const locked = S.needKey && !S.hasKey;
+    const gc = locked ? '179,38,30' : '232,195,106';
+    bg.addColorStop(0, 'rgba(' + gc + ',.5)'); bg.addColorStop(1, 'rgba(' + gc + ',0)');
+    ctx.fillStyle = bg; ctx.fillRect(bx - cs * 2.4, by - cs * 2.4, cs * 4.8, cs * 4.8);
+    ctx.fillStyle = locked ? '#ff6a5c' : '#ffe9a8'; ctx.fillRect(BASE.x * cs + cs * .2, BASE.y * cs + cs * .52, cs * .2, cs * .16);
+
+    for (const it of S.items) {
+      const d = dist(it, S.p);
+      const rng = it.type === 'key' ? 13 : 7;
+      if (d > rng) continue;
+      ctx.globalAlpha = (0.35 + 0.35 * Math.sin(t * 3 + it.x * 1.7 + it.y)) * Math.min(1, (rng + 1 - d) / 4);
+      ctx.fillStyle = ITEM_COLOR[it.type];
+      ctx.beginPath(); ctx.arc((it.x + .5) * cs, (it.y + .5) * cs, Math.max(1.5, cs * (it.type === 'key' ? .13 : .07)), 0, 6.283); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    for (const m of S.monsters) {
+      const d = dist(m, S.p);
+      if (d <= 8.5) drawEyes(m, Math.max(.3, Math.min(1, 1.1 - (d - 3) / 6)));
+    }
+    ctx.restore();
+
+    // flecha hacia la cabaña cuando no está a la vista
+    const bsx = (BASE.x + .5 - cam.x) * cs, bsy = (BASE.y + .5 - cam.y) * cs;
+    if (bsx < 0 || bsx > VW * cs || bsy < 0 || bsy > VH * cs) {
+      const ang = Math.atan2(BASE.y - S.p.y, BASE.x - S.p.x);
+      const m = cs * .8, hw = VW * cs / 2, hh = VH * cs / 2;
+      const c = Math.abs(Math.cos(ang)), s = Math.abs(Math.sin(ang));
+      const tt = Math.min(c > 0.001 ? (hw - m) / c : 1e9, s > 0.001 ? (hh - m) / s : 1e9);
+      const ax = hw + Math.cos(ang) * tt, ay = hh + Math.sin(ang) * tt;
+      ctx.save();
+      ctx.translate(ax, ay); ctx.rotate(ang);
+      ctx.fillStyle = 'rgba(232,195,106,' + (0.65 + 0.25 * Math.sin(t * 4)) + ')';
+      ctx.beginPath(); ctx.moveTo(cs * .32, 0); ctx.lineTo(-cs * .22, -cs * .22); ctx.lineTo(-cs * .22, cs * .22); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+
+    const near = Math.max(0, 1 - S.nearest / 4);
+    const vig = Math.min(0.55, near * 0.4 + S.hurtT * 0.7);
+    if (vig > 0.01) {
+      const vg = ctx.createRadialGradient(VW * cs / 2, VH * cs / 2, VH * cs * .3, VW * cs / 2, VH * cs / 2, VW * cs * .62);
+      vg.addColorStop(0, 'rgba(120,0,0,0)'); vg.addColorStop(1, 'rgba(150,10,10,' + vig + ')');
+      ctx.fillStyle = vg; ctx.fillRect(0, 0, VW * cs, VH * cs);
+    }
+  }
+
+  // ---------- bucle ----------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw(now / 1000);
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- entradas ----------
+  window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (KEYS[k]) {
+      e.preventDefault();
+      const d = KEYS[k];
+      if (!held.includes(d)) held.push(d);
+      return;
+    }
+    if (k === ' ' || k === 'spacebar') {
+      e.preventDefault();
+      if (mode === 'play') flash(); else if (!e.repeat) { initAudio(); onOverlayButton(); }
+      return;
+    }
+    if (k === 'enter' && mode !== 'play' && document.activeElement !== ovB) { onOverlayButton(); return; }
+    if (k === 'm') toggleMute();
+    if (k === 'r') { held = []; showOverlay('menu'); }
+  });
+  window.addEventListener('keyup', e => {
+    const d = KEYS[e.key.toLowerCase()];
+    if (d) held = held.filter(x => x !== d);
+  });
+  window.addEventListener('blur', () => { held = []; });
+
+  document.querySelectorAll('.pad [data-dir]').forEach(btn => {
+    const d = btn.dataset.dir;
+    const press = e => { e.preventDefault(); initAudio(); if (!held.includes(d)) held.push(d); btn.classList.add('down'); };
+    const release = () => { held = held.filter(x => x !== d); btn.classList.remove('down'); };
+    btn.addEventListener('pointerdown', press);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, release));
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+  });
+  $('flashBtn').addEventListener('pointerdown', e => { e.preventDefault(); initAudio(); flash(); });
+  ovB.addEventListener('click', onOverlayButton);
+  ovB2.addEventListener('click', onOverlayButton2);
+  $('restartBtn').addEventListener('click', () => { held = []; showOverlay('menu'); });
+
+  function toggleMute() {
+    muted = !muted;
+    const b = $('muteBtn');
+    b.textContent = 'Sonido: ' + (muted ? 'no' : 'sí');
+    b.setAttribute('aria-pressed', String(muted));
+  }
+  $('muteBtn').addEventListener('click', toggleMute);
+
+  window.addEventListener('resize', resize);
+
+  // ---------- inicio ----------
+  S = newGame(1, 0);
+  resetHud(); hud();
+  resize();
+  showOverlay('menu');
+  requestAnimationFrame(frame);
+})();
+</script>
